@@ -1,0 +1,29 @@
+{% extends '@App/layout.twig' %}
+
+{% block body %}
+    {% include '@App/Block/flashMessage.twig' %}
+    <table class="table table-striped">
+        <thead class="thead-light">
+            <tr>
+                <th>ID</th>
+                <th>Title</th>
+                <th>Description</th>
+                <th>Image URL</th>
+                <th>Created At</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for offer in offers %}
+            <tr>
+                <td>{{ offer.id }}</td>
+                <td>{{ offer.title }}</td>
+                <td>{{ offer.description }}</td>
+                <td><img src="{{ offer.image_url }}" width="100px"></td>
+                <td>{{ offer.created_at }}</td>
+                <td><a href="{{ path('offer_detail', {'id': offer.id}) }}">Edit</a> | <a href="{{ path('offer_delete', {'id': offer.id}) }}">Delete</a></td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endblock %}

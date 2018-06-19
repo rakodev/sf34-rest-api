@@ -1,0 +1,16 @@
+<html>
+<head>
+    <!-- Bootstrap CSS -->
+    <link rel="stylesheet" href="{{ asset('build/css/app.css') }}">
+</head>
+<body>
+    <header>
+        {% include '@App/menu.twig' %}
+    </header>
+    <main role="main" class="container">
+        {% block body %}{% endblock %}
+    </main>
+    <footer class="footer"></footer>
+    <script src="{{ asset('build/js/app.js') }}"></script>
+</body>
+</html>

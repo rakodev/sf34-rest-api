@@ -1,0 +1,169 @@
+export DEBIAN_FRONTEND=noninteractive
+
+############################ CONFIG ############################
+# Which PHP Version
+PHPV="7.2"
+# php extentions folder in this directory /usr/lib/php/
+PHPE="20170718"
+# which timezone
+# List all available timezone
+# timedatectl list-timezones
+# search for timezone
+# timedatectl list-timezones |  egrep "Amsterdam"
+TIMEZONE="Europe/Amsterdam"
+############################ CONFIG ############################
+
+echo "--> Updating package db <--"
+apt-get update -y
+
+echo "--> Configuring locales <--"
+#apt-get install language-pack-en-base language-pack-en
+locale-gen en_US.UTF-8
+
+echo "--> Upgrading packages <--"
+apt-get upgrade -y
+
+echo "--> Install utils <--"
+apt-get install apt-transport-https
+
+# PHP 7.1 is not available via the default Debian repositories, so we will add the “packages.sury.org/php” repository, update the system and install the PHP 7.1 packages.
+sudo wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
+sudo sh -c 'echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" > /etc/apt/sources.list.d/php.list'
+sudo apt-get update -y
+
+echo "--> Installing main modules <--"
+apt-get install -y htop git-core vim apache2 memcached curl redis-server unzip php$PHPV-fpm php$PHPV-mysql php$PHPV-intl php$PHPV-curl php$PHPV-gd php$PHPV-json php$PHPV-bcmath php$PHPV-apcu php$PHPV-cli php$PHPV-dev
+
+echo "--> Enabling apache mods <--"
+a2enmod rewrite proxy_fcgi setenvif
+
+echo "--> Set timezone <--"
+timedatectl set-timezone "$TIMEZONE"
+
+echo "--> Install Memcached <--"
+apt-get -y install gcc make autoconf libc-dev pkg-config zlib1g-dev libmemcached-dev
+# Installing '/usr/lib/php/20170718/memcached.so'
+yes '' | sudo pecl install memcached
+
+echo "--> Installing MariaDB Server <--"
+apt-get -y install mariadb-server
+echo "Updating mysql configs in /etc/mysql/mariadb.conf.d/50-server.cnf"
+sed -i "s/bind-address.*//g" /etc/mysql/mariadb.conf.d/50-server.cnf
+service mysql restart
+
+echo "--> Installing PhpMyAdmin <--"
+# PHP modules for phpmyadmin
+apt-get install -y php$PHPV-bz2 php$PHPV-mbstring php$PHPV-xml php$PHPV-zip
+
+echo  "Login to phpmyadmin with username: phpmyadmin and password: vagrant"
+# phpmyadmin config file here: /etc/dbconfig-common/phpmyadmin.conf
+# username is phpmyadmin
+APP_PASS="vagrant"
+ROOT_PASS="vagrant"
+APP_DB_PASS="vagrant"
+
+echo "phpmyadmin phpmyadmin/dbconfig-install boolean true" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/app-password-confirm password $APP_PASS" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/mysql/admin-pass password $ROOT_PASS" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/mysql/app-pass password $APP_DB_PASS" | debconf-set-selections
+echo "phpmyadmin phpmyadmin/reconfigure-webserver multiselect apache2" | debconf-set-selections
+
+apt-get install -y phpmyadmin
+
+echo "--> Installing xDebug <--"
+# You should add "zend_extension=/usr/lib/php/20170718/xdebug.so" to php.ini
+yes '' | sudo pecl install xdebug
+
+echo "--> Setting up Apache virtual host <--"
+echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
+PHPAPACHE=$(cat <<EOF
+extension=memcached.so
+
+[xdebug]
+zend_extension="/usr/lib/php/$PHPE/xdebug.so"
+xdebug.default_enable = 1
+;xdebug.idekey = "PHPStorm"
+xdebug.remote_enable = 1
+xdebug.remote_autostart = 1
+;xdebug.remote_connect_back = on
+xdebug.remote_port = 9000
+xdebug.remote_handler=dbgp
+xdebug.remote_log="/tmp/xdebug.log"
+xdebug.remote_host=10.0.2.2
+EOF
+)
+echo "${PHPAPACHE}" >> /etc/php/$PHPV/fpm/php.ini
+
+PHPCLI=$(cat <<EOF
+extension=memcached.so
+EOF
+)
+echo "${PHPCLI}" >> /etc/php/$PHPV/cli/php.ini
+
+cp /var/www/Api/api.vhost.conf /etc/apache2/sites-available/
+cp /var/www/Admin/admin.vhost.conf /etc/apache2/sites-available/
+
+# set a2ensite
+a2ensite admin.vhost.conf
+a2ensite api.vhost.conf
+
+# PHP Config
+sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/$PHPV/fpm/php.ini
+sed -i "s/error_reporting = .*/error_reporting = E_ALL/" /etc/php/$PHPV/cli/php.ini
+sed -i "s/;date.timezone =.*/date.timezone = Europe\\/Amsterdam/g" /etc/php/$PHPV/cli/php.ini
+sed -i "s/;date.timezone =.*/date.timezone = Europe\\/Amsterdam/g" /etc/php/$PHPV/fpm/php.ini
+sed -i "s/display_errors = .*/display_errors = On/" /etc/php/$PHPV/fpm/php.ini
+sed -i "s/display_errors = .*/display_errors = On/" /etc/php/$PHPV/cli/php.ini
+sed -i 's/memory_limit = .*/memory_limit = 800M/' /etc/php/$PHPV/fpm/php.ini
+sed -i 's/memory_limit = .*/memory_limit = 800M/' /etc/php/$PHPV/cli/php.ini
+sed -i "s/session.save_handler =.*/session.save_handler = memcached/g" /etc/php/$PHPV/fpm/php.ini
+# grep --include=\*.ini -r . -e "session.save_handler"
+sed -i "s/;session.save_path =.*/session.save_path = 127.0.0.1:11211/" /etc/php/$PHPV/fpm/php.ini
+
+# Install Composer globally
+curl -s https://getcomposer.org/installer | php
+mv composer.phar /usr/local/bin/composer
+
+
+# Install Nodejs
+# https://nodejs.org/en/download/package-manager/#debian-and-ubuntu-based-linux-distributions
+curl -sL https://deb.nodesource.com/setup_10.x | sudo -E bash -
+apt-get update
+apt-get install -y nodejs
+apt-get install -y build-essential
+
+# Install Yarn
+curl -sS https://dl.yarnpkg.com/debian/pubkey.gpg | sudo apt-key add -
+echo "deb https://dl.yarnpkg.com/debian/ stable main" | sudo tee /etc/apt/sources.list.d/yarn.list
+apt-get update
+apt-get install yarn
+
+# vim /etc/php/7.2/fpm/pool.d/www.conf
+# user = my_user
+# group = my_group
+# listen = /run/php/php7.2-fpm.sock
+# listen.user = www-data
+# listen.group = www-data
+
+# set hosts
+echo "127.0.0.1 local.offer.api local.offer.admin" >> /etc/hosts
+
+systemctl restart apache2
+systemctl restart php$PHPV-fpm
+
+rm -rf /var/www/html/
+
+# https://superuser.com/questions/957708/mysql-mariadb-error-1698-28000-access-denied-for-user-rootlocalhost/1103735#1103735
+# https://askubuntu.com/questions/448404/error-1045-28000-access-denied-for-user-rootlocalhost-using-password-y/636579#636579
+# P@ssw0rd!
+mysql --user=root <<EOF
+USE mysql;
+UPDATE user SET password=PASSWORD('vagrant') WHERE User='root' AND Host = 'localhost';
+UPDATE user SET plugin=' ' WHERE User='root';
+CREATE DATABASE offer_test CHARACTER SET utf8 COLLATE utf8_general_ci;
+FLUSH PRIVILEGES;
+EOF
+
+sudo -u vagrant -H sh -c "cd /var/www/Admin/; composer install; yarn install; ./node_modules/.bin/encore dev"
+sudo -u vagrant -H sh -c "cd /var/www/Api/; composer install; php bin/console doctrine:schema:update --force"
