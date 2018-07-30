@@ -25,7 +25,7 @@ https://www.vagrantup.com/downloads.html
 - **That's all!** Now you can open this address on your browser:
     - [http://local.offer.admin/](http://local.offer.admin/)
 - API Documentation available here:
-    - [http://local.offer.api/doc](http://local.offer.api/doc)
+    - [http://local.offer.api/](http://local.offer.api/)
     
 
 ### Informations
