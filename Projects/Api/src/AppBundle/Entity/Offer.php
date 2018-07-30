@@ -77,7 +77,7 @@ class Offer
     /**
      * @var \DateTime
      *
-     * @ORM\Column(name="updated_at", type="datetime")
+     * @ORM\Column(name="updated_at", type="datetime", nullable=true)
      *
      * @SWG\Property(type="string", format="Y-m-d H:i:s", example="2018-06-19 19:35:13")
      */
